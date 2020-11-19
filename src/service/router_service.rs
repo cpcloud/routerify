@@ -182,7 +182,7 @@ where
         }
 
         if let Some(router) = Self::downcast_router_to_hyper_body_type(router) {
-            let handler: ErrHandler<hyper::Body> = ErrHandler::WithoutInfo(Box::new(move |err: crate::Error| {
+            let handler: ErrHandler<hyper::Body, E2> = ErrHandler::WithoutInfo(Box::new(move |err| {
                 Box::new(async move {
                     Response::builder()
                         .status(StatusCode::INTERNAL_SERVER_ERROR)

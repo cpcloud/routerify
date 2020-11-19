@@ -710,7 +710,7 @@ where
         H: FnMut(E2) -> R + Send + Sync + 'static,
         R: Future<Output = Response<B>> + Send + 'static,
     {
-        let handler: ErrHandlerWithoutInfo<B, E2> = Box::new(move |err: E2| Box::new(handler(err)));
+        let handler: ErrHandlerWithoutInfo<B, E2> = Box::new(move |err| Box::new(handler(err)));
 
         self.and_then(move |mut inner| {
             inner.err_handler = Some(ErrHandler::WithoutInfo(handler));
@@ -726,11 +726,10 @@ where
     /// for more info.
     pub fn err_handler_with_info<H, R>(self, mut handler: H) -> Self
     where
-        H: FnMut(crate::Error, RequestInfo) -> R + Send + Sync + 'static,
+        H: FnMut(E2, RequestInfo) -> R + Send + Sync + 'static,
         R: Future<Output = Response<B>> + Send + 'static,
     {
-        let handler: ErrHandlerWithInfo<B> =
-            Box::new(move |err: crate::Error, req_info: RequestInfo| Box::new(handler(err, req_info)));
+        let handler: ErrHandlerWithInfo<B, E2> = Box::new(move |err, req_info| Box::new(handler(err, req_info)));
 
         self.and_then(move |mut inner| {
             inner.err_handler = Some(ErrHandler::WithInfo(handler));
