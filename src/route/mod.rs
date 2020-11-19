@@ -53,7 +53,11 @@ pub struct Route<B, E> {
     pub(crate) methods: Vec<Method>,
 }
 
-impl<B: HttpBody + Send + Sync + Unpin + 'static, E: std::error::Error + Send + Sync + Unpin + 'static> Route<B, E> {
+impl<B, E> Route<B, E>
+where
+    B: HttpBody + Send + Sync + Unpin + 'static,
+    E: std::error::Error + Send + Sync + Unpin + 'static,
+{
     pub(crate) fn new_with_boxed_handler<P: Into<String>>(
         path: P,
         methods: Vec<Method>,
