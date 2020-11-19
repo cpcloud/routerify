@@ -5,6 +5,7 @@ use crate::route::Route;
 use crate::types::RequestInfo;
 use hyper::{body::HttpBody, Request, Response};
 use regex::RegexSet;
+use std::error::Error as StdError;
 use std::fmt::{self, Debug, Formatter};
 use std::future::Future;
 use std::pin::Pin;
@@ -13,12 +14,12 @@ pub use self::builder::RouterBuilder;
 
 mod builder;
 
-pub(crate) type ErrHandlerWithoutInfo<B> =
-    Box<dyn FnMut(crate::Error) -> ErrHandlerWithoutInfoReturn<B> + Send + Sync + 'static>;
+pub(crate) type ErrHandlerWithoutInfo<B, E> =
+    Box<dyn FnMut(E) -> ErrHandlerWithoutInfoReturn<B> + Send + Sync + 'static>;
 pub(crate) type ErrHandlerWithoutInfoReturn<B> = Box<dyn Future<Output = Response<B>> + Send + 'static>;
 
-pub(crate) type ErrHandlerWithInfo<B> =
-    Box<dyn FnMut(crate::Error, RequestInfo) -> ErrHandlerWithInfoReturn<B> + Send + Sync + 'static>;
+pub(crate) type ErrHandlerWithInfo<B, E> =
+    Box<dyn FnMut(E, RequestInfo) -> ErrHandlerWithInfoReturn<B> + Send + Sync + 'static>;
 pub(crate) type ErrHandlerWithInfoReturn<B> = Box<dyn Future<Output = Response<B>> + Send + 'static>;
 
 /// Represents a modular, lightweight and mountable router type.
@@ -56,7 +57,7 @@ pub(crate) type ErrHandlerWithInfoReturn<B> = Box<dyn Future<Output = Response<B
 /// # }
 /// # run();
 /// ```
-pub struct Router<B, E> {
+pub struct Router<B, E, E2> {
     pub(crate) pre_middlewares: Vec<PreMiddleware<E>>,
     pub(crate) routes: Vec<Route<B, E>>,
     pub(crate) post_middlewares: Vec<PostMiddleware<B, E>>,
@@ -64,7 +65,7 @@ pub struct Router<B, E> {
 
     // This handler should be added only on root Router.
     // Any error handler attached to scoped router will be ignored.
-    pub(crate) err_handler: Option<ErrHandler<B>>,
+    pub(crate) err_handler: Option<ErrHandler<B, E2>>,
 
     // We'll initialize it from the RouterService via Router::init_regex_set() method.
     regex_set: Option<RegexSet>,
@@ -73,13 +74,17 @@ pub struct Router<B, E> {
     pub(crate) should_gen_req_info: Option<bool>,
 }
 
-pub(crate) enum ErrHandler<B> {
-    WithoutInfo(ErrHandlerWithoutInfo<B>),
-    WithInfo(ErrHandlerWithInfo<B>),
+pub(crate) enum ErrHandler<B, E> {
+    WithoutInfo(ErrHandlerWithoutInfo<B, E>),
+    WithInfo(ErrHandlerWithInfo<B, E>),
 }
 
-impl<B: HttpBody + Send + Sync + Unpin + 'static> ErrHandler<B> {
-    pub(crate) async fn execute(&mut self, err: crate::Error, req_info: Option<RequestInfo>) -> Response<B> {
+impl<B, E> ErrHandler<B, E>
+where
+    B: HttpBody + Send + Sync + Unpin + 'static,
+    E: StdError + Send + Sync + 'static,
+{
+    pub(crate) async fn execute(&mut self, err: E, req_info: Option<RequestInfo>) -> Response<B> {
         match self {
             ErrHandler::WithoutInfo(ref mut err_handler) => Pin::from(err_handler(err)).await,
             ErrHandler::WithInfo(ref mut err_handler) => {
@@ -89,13 +94,18 @@ impl<B: HttpBody + Send + Sync + Unpin + 'static> ErrHandler<B> {
     }
 }
 
-impl<B: HttpBody + Send + Sync + Unpin + 'static, E: std::error::Error + Send + Sync + Unpin + 'static> Router<B, E> {
+impl<B, E, E2> Router<B, E, E2>
+where
+    B: HttpBody + Send + Sync + Unpin + 'static,
+    E: StdError + Send + Sync + Unpin + 'static,
+    E2: StdError + Send + Sync + Unpin + 'static,
+{
     pub(crate) fn new(
         pre_middlewares: Vec<PreMiddleware<E>>,
         routes: Vec<Route<B, E>>,
         post_middlewares: Vec<PostMiddleware<B, E>>,
         scoped_data_maps: Vec<ScopedDataMap>,
-        err_handler: Option<ErrHandler<B>>,
+        err_handler: Option<ErrHandler<B, E2>>,
     ) -> Self {
         Router {
             pre_middlewares,
@@ -143,7 +153,7 @@ impl<B: HttpBody + Send + Sync + Unpin + 'static, E: std::error::Error + Send + 
     }
 
     /// Return a [RouterBuilder](./struct.RouterBuilder.html) instance to build a `Router`.
-    pub fn builder() -> RouterBuilder<B, E> {
+    pub fn builder() -> RouterBuilder<B, E, E2> {
         builder::RouterBuilder::new()
     }
 
@@ -270,7 +280,7 @@ impl<B: HttpBody + Send + Sync + Unpin + 'static, E: std::error::Error + Send + 
     }
 }
 
-impl<B, E> Debug for Router<B, E> {
+impl<B, E, E2> Debug for Router<B, E, E2> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,

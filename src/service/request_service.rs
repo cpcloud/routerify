@@ -8,22 +8,31 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-pub struct RequestService<B, E> {
-    pub(crate) router: *mut Router<B, E>,
+pub struct RequestService<B, E, E2> {
+    pub(crate) router: *mut Router<B, E, E2>,
     pub(crate) remote_addr: SocketAddr,
 }
 
-unsafe impl<B: HttpBody + Send + Sync + Unpin + 'static, E: std::error::Error + Send + Sync + Unpin + 'static> Send
-    for RequestService<B, E>
+unsafe impl<B, E, E2> Send for RequestService<B, E, E2>
+where
+    B: HttpBody + Send + Sync + Unpin + 'static,
+    E: std::error::Error + Send + Sync + Unpin + 'static,
+    E2: std::error::Error + Send + Sync + Unpin + 'static,
 {
 }
-unsafe impl<B: HttpBody + Send + Sync + Unpin + 'static, E: std::error::Error + Send + Sync + Unpin + 'static> Sync
-    for RequestService<B, E>
+unsafe impl<B, E, E2> Sync for RequestService<B, E, E2>
+where
+    B: HttpBody + Send + Sync + Unpin + 'static,
+    E: std::error::Error + Send + Sync + Unpin + 'static,
+    E2: std::error::Error + Send + Sync + Unpin + 'static,
 {
 }
 
-impl<B: HttpBody + Send + Sync + Unpin + 'static, E: std::error::Error + Send + Sync + Unpin + 'static>
-    Service<Request<hyper::Body>> for RequestService<B, E>
+impl<B, E, E2> Service<Request<hyper::Body>> for RequestService<B, E, E2>
+where
+    B: HttpBody + Send + Sync + Unpin + 'static,
+    E: std::error::Error + Send + Sync + Unpin + 'static,
+    E2: std::error::Error + Send + Sync + Unpin + 'static,
 {
     type Response = Response<B>;
     type Error = crate::Error;

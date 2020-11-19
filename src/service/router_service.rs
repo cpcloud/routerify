@@ -65,16 +65,19 @@ use std::task::{Context, Poll};
 /// }
 /// ```
 #[derive(Debug)]
-pub struct RouterService<B, E> {
-    router: Router<B, E>,
+pub struct RouterService<B, E, E2> {
+    router: Router<B, E, E2>,
 }
 
-impl<B: HttpBody + Send + Sync + Unpin + 'static, E: std::error::Error + Send + Sync + Unpin + 'static>
-    RouterService<B, E>
+impl<B, E, E2> RouterService<B, E, E2>
+where
+    B: HttpBody + Send + Sync + Unpin + 'static,
+    E: std::error::Error + Send + Sync + Unpin + 'static,
+    E2: std::error::Error + Send + Sync + Unpin + 'static,
 {
     /// Creates a new service with the provided router and it's ready to be used with the hyper [`serve`](https://docs.rs/hyper/0.13.5/hyper/server/struct.Builder.html#method.serve)
     /// method.
-    pub fn new(mut router: Router<B, E>) -> crate::Result<RouterService<B, E>> {
+    pub fn new(mut router: Router<B, E, E2>) -> crate::Result<Self> {
         Self::init_router_with_x_powered_by_middleware(&mut router);
         // Self::init_router_with_keep_alive_middleware(&mut router);
 
@@ -89,7 +92,7 @@ impl<B: HttpBody + Send + Sync + Unpin + 'static, E: std::error::Error + Send + 
         Ok(RouterService { router })
     }
 
-    fn init_router_with_x_powered_by_middleware(router: &mut Router<B, E>) {
+    fn init_router_with_x_powered_by_middleware(router: &mut Router<B, E, E2>) {
         let x_powered_by_post_middleware = PostMiddleware::new("/*", |mut res| async move {
             res.headers_mut().insert(
                 constants::HEADER_NAME_X_POWERED_BY,
@@ -113,7 +116,7 @@ impl<B: HttpBody + Send + Sync + Unpin + 'static, E: std::error::Error + Send + 
     //     router.post_middlewares.push(keep_alive_post_middleware);
     // }
 
-    fn init_router_with_global_options_route(router: &mut Router<B, E>) {
+    fn init_router_with_global_options_route(router: &mut Router<B, E, E2>) {
         let options_method = vec![Method::OPTIONS];
         let found = router
             .routes
@@ -142,7 +145,7 @@ impl<B: HttpBody + Send + Sync + Unpin + 'static, E: std::error::Error + Send + 
         }
     }
 
-    fn init_router_with_default_404_route(router: &mut Router<B, E>) {
+    fn init_router_with_default_404_route(router: &mut Router<B, E, E2>) {
         let found = router
             .routes
             .iter()
@@ -171,7 +174,7 @@ impl<B: HttpBody + Send + Sync + Unpin + 'static, E: std::error::Error + Send + 
         }
     }
 
-    fn init_router_with_err_handler(router: &mut Router<B, E>) {
+    fn init_router_with_err_handler(router: &mut Router<B, E, E2>) {
         let found = router.err_handler.is_some();
 
         if found {
@@ -201,16 +204,19 @@ impl<B: HttpBody + Send + Sync + Unpin + 'static, E: std::error::Error + Send + 
         }
     }
 
-    fn downcast_router_to_hyper_body_type(router: &mut Router<B, E>) -> Option<&mut Router<hyper::Body, E>> {
+    fn downcast_router_to_hyper_body_type(router: &mut Router<B, E, E2>) -> Option<&mut Router<hyper::Body, E, E2>> {
         let any_obj: &mut dyn Any = router;
-        any_obj.downcast_mut::<Router<hyper::Body, E>>()
+        any_obj.downcast_mut::<Router<hyper::Body, E, E2>>()
     }
 }
 
-impl<B: HttpBody + Send + Sync + Unpin + 'static, E: std::error::Error + Send + Sync + Unpin + 'static>
-    Service<&AddrStream> for RouterService<B, E>
+impl<B, E, E2> Service<&AddrStream> for RouterService<B, E, E2>
+where
+    B: HttpBody + Send + Sync + Unpin + 'static,
+    E: std::error::Error + Send + Sync + Unpin + 'static,
+    E2: std::error::Error + Send + Sync + Unpin + 'static,
 {
-    type Response = RequestService<B, E>;
+    type Response = RequestService<B, E, E2>;
     type Error = Infallible;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send + 'static>>;
 
